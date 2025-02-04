@@ -125,6 +125,19 @@ func Initialize(authOpts map[string]string, logLevel log.Level, version string) 
 	return b, nil
 }
 
+var initbackends = map[string]func(b *Backends, authOpts map[string]string, logLevel log.Level, version string){
+    postgresBackend: func(b *Backends, authOpts map[string]string, logLevel log.Level, version string) {
+        hasher := hashing.NewHasher(authOpts, allowedBackendsOptsPrefix[postgresBackend])
+        beIface, err := NewPostgres(authOpts, logLevel, hasher)
+        if err != nil {
+            log.Fatalf("backend register error: couldn't initialize %s backend with error %s.", postgresBackend, err)
+        } else {
+            log.Infof("backend registered: %s", beIface.GetName())
+            b.backends[postgresBackend] = beIface
+        }
+    },
+}
+
 func (b *Backends) addBackends(authOpts map[string]string, logLevel log.Level, backends []string, version string) error {
 	// Store given backends as given to order them when checking.
 	//
@@ -140,16 +153,13 @@ func (b *Backends) addBackends(authOpts map[string]string, logLevel log.Level, b
 		var beIface Backend
 		var err error
 
+        if initFunc, ok := initbackends[bename]; ok {
+            initFunc(b, authOpts, logLevel, version)
+            continue
+        }
+
 		hasher := hashing.NewHasher(authOpts, allowedBackendsOptsPrefix[bename])
 		switch bename {
-		case postgresBackend:
-			beIface, err = NewPostgres(authOpts, logLevel, hasher)
-			if err != nil {
-				log.Fatalf("backend register error: couldn't initialize %s backend with error %s.", bename, err)
-			} else {
-				log.Infof("backend registered: %s", beIface.GetName())
-				b.backends[postgresBackend] = beIface.(Postgres)
-			}
 		case jwtBackend:
 			beIface, err = NewJWT(authOpts, logLevel, hasher, version)
 			if err != nil {
@@ -189,22 +199,6 @@ func (b *Backends) addBackends(authOpts map[string]string, logLevel log.Level, b
 			} else {
 				log.Infof("Backend registered: %s", beIface.GetName())
 				b.backends[httpBackend] = beIface.(HTTP)
-			}
-		case sqliteBackend:
-			beIface, err = NewSqlite(authOpts, logLevel, hasher)
-			if err != nil {
-				log.Fatalf("Backend register error: couldn't initialize %s backend with error %s.", bename, err)
-			} else {
-				log.Infof("Backend registered: %s", beIface.GetName())
-				b.backends[sqliteBackend] = beIface.(Sqlite)
-			}
-		case mongoBackend:
-			beIface, err = NewMongo(authOpts, logLevel, hasher)
-			if err != nil {
-				log.Fatalf("Backend register error: couldn't initialize %s backend with error %s.", bename, err)
-			} else {
-				log.Infof("Backend registered: %s", beIface.GetName())
-				b.backends[mongoBackend] = beIface.(Mongo)
 			}
 		case grpcBackend:
 			beIface, err = NewGRPC(authOpts, logLevel)

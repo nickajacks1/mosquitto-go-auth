@@ -1,3 +1,5 @@
+//go:build !nomongo
+
 package backends
 
 import (
@@ -16,6 +18,21 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+func init() {
+    initbackends[mongoBackend] = initMongoBackend
+}
+
+func initMongoBackend(b *Backends, authOpts map[string]string, logLevel log.Level, _ string) {
+    hasher := hashing.NewHasher(authOpts, allowedBackendsOptsPrefix[mongoBackend])
+    beIface, err := NewMongo(authOpts, logLevel, hasher)
+    if err != nil {
+        log.Fatalf("Backend register error: couldn't initialize %s backend with error %s.", mongoBackend, err)
+    } else {
+        log.Infof("Backend registered: %s", beIface.GetName())
+        b.backends[mongoBackend] = beIface
+    }
+}
 
 type Mongo struct {
 	Host               string
@@ -47,10 +64,9 @@ type MongoUser struct {
 }
 
 func NewMongo(authOpts map[string]string, logLevel log.Level, hasher hashing.HashComparer) (Mongo, error) {
-
 	log.SetLevel(logLevel)
 
-	var m = Mongo{
+	m := Mongo{
 		Host:               "localhost",
 		Port:               "27017",
 		Username:           "",
@@ -144,12 +160,10 @@ func NewMongo(authOpts map[string]string, logLevel log.Level, hasher hashing.Has
 	m.Conn = client
 
 	return m, nil
-
 }
 
-//GetUser checks that the username exists and the given password hashes to the same password.
+// GetUser checks that the username exists and the given password hashes to the same password.
 func (o Mongo) GetUser(username, password, clientid string) (bool, error) {
-
 	uc := o.Conn.Database(o.DBName).Collection(o.UsersCollection)
 
 	var user MongoUser
@@ -170,12 +184,10 @@ func (o Mongo) GetUser(username, password, clientid string) (bool, error) {
 	}
 
 	return false, nil
-
 }
 
-//GetSuperuser checks that the key username:su exists and has value "true".
+// GetSuperuser checks that the key username:su exists and has value "true".
 func (o Mongo) GetSuperuser(username string) (bool, error) {
-
 	if o.disableSuperuser {
 		return false, nil
 	}
@@ -196,13 +208,11 @@ func (o Mongo) GetSuperuser(username string) (bool, error) {
 	}
 
 	return user.Superuser, nil
-
 }
 
-//CheckAcl gets all acls for the username and tries to match against topic, acc, and username/clientid if needed.
+// CheckAcl gets all acls for the username and tries to match against topic, acc, and username/clientid if needed.
 func (o Mongo) CheckAcl(username, topic, clientid string, acc int32) (bool, error) {
-
-	//Get user and check his acls.
+	// Get user and check his acls.
 	uc := o.Conn.Database(o.DBName).Collection(o.UsersCollection)
 
 	var user MongoUser
@@ -225,11 +235,10 @@ func (o Mongo) CheckAcl(username, topic, clientid string, acc int32) (bool, erro
 		}
 	}
 
-	//Now check common acls.
+	// Now check common acls.
 
 	ac := o.Conn.Database(o.DBName).Collection(o.AclsCollection)
 	cur, err := ac.Find(context.TODO(), bson.M{"acc": bson.M{"$in": []int32{acc, 3}}})
-
 	if err != nil {
 		log.Debugf("Mongo check acl error: %s", err)
 		return false, err
@@ -252,15 +261,14 @@ func (o Mongo) CheckAcl(username, topic, clientid string, acc int32) (bool, erro
 	}
 
 	return false, nil
-
 }
 
-//GetName returns the backend's name
+// GetName returns the backend's name
 func (o Mongo) GetName() string {
 	return "Mongo"
 }
 
-//Halt closes the mongo session.
+// Halt closes the mongo session.
 func (o Mongo) Halt() {
 	if o.Conn != nil {
 		err := o.Conn.Disconnect(context.TODO())

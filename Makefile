@@ -7,10 +7,20 @@ ifeq ($(UNAME_S),Darwin)
 	LDFLAGS += -undefined dynamic_lookup
 endif
 
+TAGS := 
+
+ifdef NO_MONGO
+	TAGS := $(TAGS),nomongo
+endif
+
+ifdef NO_SQLITE
+	TAGS := $(TAGS),nosqlite
+endif
+
 all:
 	@echo "Bulding for $(UNAME_S)"
-	env CGO_CFLAGS="$(CFLAGS)" go build -buildmode=c-archive go-auth.go
-	env CGO_LDFLAGS="$(LDFLAGS)" go build -buildmode=c-shared -o go-auth.so
+	env CGO_CFLAGS="$(CFLAGS)" go build -buildmode=c-archive -tags $(TAGS) -v go-auth.go
+	env CGO_LDFLAGS="$(LDFLAGS)" go build -buildmode=c-shared -tags $(TAGS) -v -o go-auth.so
 	go build pw-gen/pw.go
 
 without-vcs:

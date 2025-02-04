@@ -1,3 +1,4 @@
+//go:build !nosqlite
 package backends
 
 import (
@@ -12,6 +13,21 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
+
+func init() {
+    initbackends[sqliteBackend] = initSqliteBackend
+}
+
+func initSqliteBackend(b *Backends, authOpts map[string]string, logLevel log.Level, _ string) {
+    hasher := hashing.NewHasher(authOpts, allowedBackendsOptsPrefix[sqliteBackend])
+    beIface, err := NewSqlite(authOpts, logLevel, hasher)
+    if err != nil {
+        log.Fatalf("Backend register error: couldn't initialize %s backend with error %s.", sqliteBackend, err)
+    } else {
+        log.Infof("Backend registered: %s", beIface.GetName())
+        b.backends[sqliteBackend] = beIface
+    }
+}
 
 //Sqlite holds all fields of the sqlite db connection.
 type Sqlite struct {
